@@ -18,7 +18,7 @@ using Microsoft.Win32;
 
 [assembly: System.Reflection.AssemblyTitle("카카오톡 추가 실행기")]
 [assembly: System.Reflection.AssemblyProduct("KakaoTalk Extra Launcher")]
-[assembly: System.Reflection.AssemblyVersion("1.0.0.0")]
+[assembly: System.Reflection.AssemblyVersion("1.1.0.0")]
 
 namespace KakaoExtra
 {
@@ -39,21 +39,92 @@ namespace KakaoExtra
 
     static class Theme
     {
-        public static readonly Color Bg = Color.FromArgb(244, 245, 248);
-        public static readonly Color Card = Color.White;
-        public static readonly Color Border = Color.FromArgb(226, 228, 234);
-        public static readonly Color Text = Color.FromArgb(28, 31, 38);
-        public static readonly Color Muted = Color.FromArgb(110, 116, 130);
-        public static readonly Color Header = Color.FromArgb(34, 38, 66);
-        public static readonly Color HeaderSub = Color.FromArgb(178, 186, 226);
-        public static readonly Color Accent = Color.FromArgb(84, 96, 222);
-        public static readonly Color AccentHover = Color.FromArgb(70, 82, 206);
-        public static readonly Color AccentDown = Color.FromArgb(56, 66, 176);
-        public static readonly Color Disabled = Color.FromArgb(178, 183, 198);
-        public static readonly Color Ok = Color.FromArgb(32, 164, 96);
-        public static readonly Color Warn = Color.FromArgb(226, 150, 20);
-        public static readonly Color Bad = Color.FromArgb(220, 64, 64);
-        public static readonly Color Idle = Color.FromArgb(180, 185, 196);
+        public static bool Dark;
+        public static Color Bg, Card, Border, Text, Muted, Header, HeaderSub,
+            Accent, AccentHover, AccentDown, Disabled, Ok, Warn, Bad, Idle,
+            Secondary, SecondaryHover, SecondaryDown;
+
+        static Theme() { Set(false); }
+
+        public static void Set(bool dark)
+        {
+            Dark = dark;
+            if (dark)
+            {
+                Bg = Color.FromArgb(24, 25, 30);
+                Card = Color.FromArgb(34, 36, 43);
+                Border = Color.FromArgb(52, 55, 66);
+                Text = Color.FromArgb(230, 232, 238);
+                Muted = Color.FromArgb(150, 156, 170);
+                Header = Color.FromArgb(20, 22, 38);
+                HeaderSub = Color.FromArgb(150, 158, 205);
+                Accent = Color.FromArgb(98, 110, 236);
+                AccentHover = Color.FromArgb(114, 126, 244);
+                AccentDown = Color.FromArgb(82, 94, 214);
+                Disabled = Color.FromArgb(70, 74, 88);
+                Ok = Color.FromArgb(64, 200, 124);
+                Warn = Color.FromArgb(240, 172, 56);
+                Bad = Color.FromArgb(240, 100, 100);
+                Idle = Color.FromArgb(96, 100, 114);
+                Secondary = Color.FromArgb(44, 46, 55);
+                SecondaryHover = Color.FromArgb(52, 55, 66);
+                SecondaryDown = Color.FromArgb(62, 65, 78);
+            }
+            else
+            {
+                Bg = Color.FromArgb(244, 245, 248);
+                Card = Color.White;
+                Border = Color.FromArgb(226, 228, 234);
+                Text = Color.FromArgb(28, 31, 38);
+                Muted = Color.FromArgb(110, 116, 130);
+                Header = Color.FromArgb(34, 38, 66);
+                HeaderSub = Color.FromArgb(178, 186, 226);
+                Accent = Color.FromArgb(84, 96, 222);
+                AccentHover = Color.FromArgb(70, 82, 206);
+                AccentDown = Color.FromArgb(56, 66, 176);
+                Disabled = Color.FromArgb(178, 183, 198);
+                Ok = Color.FromArgb(32, 164, 96);
+                Warn = Color.FromArgb(226, 150, 20);
+                Bad = Color.FromArgb(220, 64, 64);
+                Idle = Color.FromArgb(180, 185, 196);
+                Secondary = Color.White;
+                SecondaryHover = Color.FromArgb(242, 243, 247);
+                SecondaryDown = Color.FromArgb(232, 234, 240);
+            }
+        }
+
+        // Windows 설정의 "앱 모드"가 어두움이면 true
+        public static bool SystemPrefersDark()
+        {
+            try
+            {
+                using (var k = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"))
+                {
+                    object v = k == null ? null : k.GetValue("AppsUseLightTheme");
+                    return v is int && (int)v == 0;
+                }
+            }
+            catch { return false; }
+        }
+    }
+
+    static class Native
+    {
+        [DllImport("dwmapi.dll")] static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);
+        [DllImport("uxtheme.dll", CharSet = CharSet.Unicode)] static extern int SetWindowTheme(IntPtr hwnd, string app, string idList);
+
+        // 제목 표시줄 색 (Windows 10 20H1 이상: 20, 그 이전 빌드: 19)
+        public static void DarkTitleBar(IntPtr hwnd, bool dark)
+        {
+            int v = dark ? 1 : 0;
+            try { if (DwmSetWindowAttribute(hwnd, 20, ref v, 4) != 0) DwmSetWindowAttribute(hwnd, 19, ref v, 4); } catch { }
+        }
+
+        // 스크롤바 색
+        public static void DarkScrollBars(IntPtr hwnd, bool dark)
+        {
+            try { SetWindowTheme(hwnd, dark ? "DarkMode_Explorer" : "Explorer", null); } catch { }
+        }
     }
 
     // ---------- 그리기 컨트롤 ----------
@@ -93,7 +164,7 @@ namespace KakaoExtra
             }
             else
             {
-                fill = down ? Color.FromArgb(232, 234, 240) : hover ? Color.FromArgb(242, 243, 247) : Color.White;
+                fill = down ? Theme.SecondaryDown : hover ? Theme.SecondaryHover : Theme.Secondary;
                 fg = Enabled ? Theme.Text : Theme.Muted;
                 border = Theme.Border;
             }
@@ -162,6 +233,57 @@ namespace KakaoExtra
             e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
             using (var b = new SolidBrush(color))
                 e.Graphics.FillEllipse(b, 0.5f, 0.5f, Width - 1.5f, Height - 1.5f);
+        }
+    }
+
+    // 헤더 오른쪽 위의 라이트/다크 전환 버튼. 지금이 라이트면 달, 다크면 해를 그린다.
+    sealed class ThemeToggle : Control
+    {
+        bool hover;
+
+        public ThemeToggle()
+        {
+            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint |
+                     ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+            Cursor = Cursors.Hand;
+        }
+
+        protected override void OnMouseEnter(EventArgs e) { hover = true; Invalidate(); base.OnMouseEnter(e); }
+        protected override void OnMouseLeave(EventArgs e) { hover = false; Invalidate(); base.OnMouseLeave(e); }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            Color bg = Parent != null ? Parent.BackColor : Theme.Header;
+            g.Clear(bg);
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+
+            int a8 = hover ? 48 : 22;
+            Color circle = Color.FromArgb(bg.R + (255 - bg.R) * a8 / 255, bg.G + (255 - bg.G) * a8 / 255, bg.B + (255 - bg.B) * a8 / 255);
+            using (var b = new SolidBrush(circle))
+                g.FillEllipse(b, 0.5f, 0.5f, Width - 1.5f, Height - 1.5f);
+
+            float cx = Width / 2f, cy = Height / 2f, r = Width * 0.2f;
+            var fg = Color.FromArgb(236, 238, 250);
+            if (Theme.Dark)
+            {
+                using (var b = new SolidBrush(fg)) g.FillEllipse(b, cx - r * 0.72f, cy - r * 0.72f, r * 1.44f, r * 1.44f);
+                using (var p = new Pen(fg, Math.Max(1.4f, Width * 0.05f)) { StartCap = LineCap.Round, EndCap = LineCap.Round })
+                {
+                    for (int i = 0; i < 8; i++)
+                    {
+                        double a = i * Math.PI / 4;
+                        float c = (float)Math.Cos(a), s = (float)Math.Sin(a);
+                        g.DrawLine(p, cx + c * r * 1.15f, cy + s * r * 1.15f, cx + c * r * 1.55f, cy + s * r * 1.55f);
+                    }
+                }
+            }
+            else
+            {
+                // 원 위에 오른쪽 위로 비켜 놓은 배경색 원을 덮어 초승달 모양을 만든다.
+                using (var b = new SolidBrush(fg)) g.FillEllipse(b, cx - r * 1.1f, cy - r * 1.1f, r * 2.2f, r * 2.2f);
+                using (var b = new SolidBrush(circle)) g.FillEllipse(b, cx - r * 0.45f, cy - r * 1.55f, r * 2.2f, r * 2.2f);
+            }
         }
     }
 
@@ -403,7 +525,7 @@ namespace KakaoExtra
         public List<int> Normal = new List<int>();
         public List<int> Extra = new List<int>();
         public string SbieText;
-        public Color SbieColor;
+        public bool SbieOk;
     }
 
     // ---------- 메인 창 ----------
@@ -420,6 +542,9 @@ namespace KakaoExtra
         Label valNormal, valExtra, valSbie, capStart, capKakao, pathStart, pathKakao;
         RoundButton btnLaunch;
         TextBox log;
+        Canvas header;
+        ThemeToggle toggle;
+        readonly ToolTip tip = new ToolTip();
         readonly Timer timer = new Timer();
         bool busy, refreshing;
         Snapshot last;
@@ -434,6 +559,11 @@ namespace KakaoExtra
             fontTitle = new Font("Malgun Gothic", 13f, FontStyle.Bold);
             fontButton = new Font("Malgun Gothic", 10.5f, FontStyle.Bold);
 
+            // 테마는 컨트롤을 만들기 전에 정한다. 저장된 선택이 없으면 Windows 앱 모드를 따른다.
+            var settings = ReadSettings();
+            string theme;
+            Theme.Set(settings.TryGetValue("theme", out theme) ? theme == "dark" : Theme.SystemPrefersDark());
+
             Text = "카카오톡 추가 실행기";
             Font = fontBase;
             BackColor = Theme.Bg;
@@ -446,7 +576,10 @@ namespace KakaoExtra
             try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
 
             BuildUi();
-            LoadPaths();
+            LoadPaths(settings);
+            // 창 핸들은 위의 CreateGraphics()에서 이미 만들어졌다.
+            Native.DarkTitleBar(Handle, Theme.Dark);
+            log.HandleCreated += delegate { Native.DarkScrollBars(log.Handle, Theme.Dark); };
 
             timer.Interval = 2500;
             timer.Tick += async delegate { await RefreshStatus(); };
@@ -456,7 +589,7 @@ namespace KakaoExtra
 
         void BuildUi()
         {
-            var header = new Canvas { Location = Point.Empty, Size = new Size(S(480), S(84)), BackColor = Theme.Header };
+            header = new Canvas { Location = Point.Empty, Size = new Size(S(480), S(84)), BackColor = Theme.Header };
             header.Paint += (s, e) =>
             {
                 IconArt.Draw(e.Graphics, S(20), S(18), S(48));
@@ -464,6 +597,10 @@ namespace KakaoExtra
                 TextRenderer.DrawText(e.Graphics, "Sandboxie 상자 " + Sbie.Box + "에서 두 번째 카카오톡을 엽니다", fontSmall,
                     new Point(S(82), S(48)), Theme.HeaderSub);
             };
+            toggle = new ThemeToggle { Location = new Point(S(426), S(25)), Size = new Size(S(34), S(34)) };
+            toggle.Click += delegate { ToggleTheme(); };
+            tip.SetToolTip(toggle, Theme.Dark ? "라이트 모드로 바꾸기" : "다크 모드로 바꾸기");
+            header.Controls.Add(toggle);
             Controls.Add(header);
 
             Controls.Add(Caption("상태", 96));
@@ -516,6 +653,7 @@ namespace KakaoExtra
                 Font = new Font("Malgun Gothic", 8.25f, FontStyle.Bold),
                 ForeColor = Theme.Muted,
                 BackColor = Theme.Bg,
+                Tag = "muted",
                 Location = new Point(S(22), S(y)),
                 Size = new Size(S(200), S(20)),
                 TextAlign = ContentAlignment.MiddleLeft
@@ -528,7 +666,7 @@ namespace KakaoExtra
             dot = new Dot { Location = new Point(S(18), S(y + 5)), Size = new Size(S(10), S(10)) };
             var label = new Label
             {
-                Text = name, ForeColor = Theme.Text, BackColor = Theme.Card,
+                Text = name, ForeColor = Theme.Text, BackColor = Theme.Card, Tag = "text",
                 Location = new Point(S(38), S(y)), Size = new Size(S(170), S(20)), TextAlign = ContentAlignment.MiddleLeft
             };
             value = new Label
@@ -546,7 +684,7 @@ namespace KakaoExtra
             int y = i * 58;
             caption = new Label
             {
-                Font = fontSmall, ForeColor = Theme.Muted, BackColor = Theme.Card,
+                Font = fontSmall, ForeColor = Theme.Muted, BackColor = Theme.Card, Tag = "muted",
                 Location = new Point(S(16), S(y + 12)), Size = new Size(S(330), S(18)), TextAlign = ContentAlignment.MiddleLeft
             };
             path = new Label
@@ -567,9 +705,9 @@ namespace KakaoExtra
 
         // ---------- 경로 ----------
 
-        void LoadPaths()
+        Dictionary<string, string> ReadSettings()
         {
-            string savedStart = null, savedKakao = null;
+            var d = new Dictionary<string, string>();
             try
             {
                 if (File.Exists(settingsPath))
@@ -577,14 +715,19 @@ namespace KakaoExtra
                     foreach (var line in File.ReadAllLines(settingsPath, Encoding.UTF8))
                     {
                         int i = line.IndexOf('=');
-                        if (i <= 0) continue;
-                        string k = line.Substring(0, i), v = line.Substring(i + 1);
-                        if (k == "start") savedStart = v;
-                        else if (k == "kakao") savedKakao = v;
+                        if (i > 0) d[line.Substring(0, i)] = line.Substring(i + 1);
                     }
                 }
             }
             catch { }
+            return d;
+        }
+
+        void LoadPaths(Dictionary<string, string> settings)
+        {
+            string savedStart, savedKakao;
+            settings.TryGetValue("start", out savedStart);
+            settings.TryGetValue("kakao", out savedKakao);
 
             if (!string.IsNullOrEmpty(savedStart) && File.Exists(savedStart)) { startExe = savedStart; startSource = "저장된 경로"; }
             else startExe = Locator.FindSandboxieStart(out startSource);
@@ -617,9 +760,53 @@ namespace KakaoExtra
             try
             {
                 Directory.CreateDirectory(Path.GetDirectoryName(settingsPath));
-                File.WriteAllLines(settingsPath, new[] { "start=" + (startExe ?? ""), "kakao=" + (kakaoExe ?? "") }, Encoding.UTF8);
+                File.WriteAllLines(settingsPath, new[]
+                {
+                    "start=" + (startExe ?? ""),
+                    "kakao=" + (kakaoExe ?? ""),
+                    "theme=" + (Theme.Dark ? "dark" : "light")
+                }, Encoding.UTF8);
             }
             catch { }
+        }
+
+        // ---------- 테마 ----------
+
+        void ToggleTheme()
+        {
+            Theme.Set(!Theme.Dark);
+            SuspendLayout();
+            BackColor = Theme.Bg;
+            ForeColor = Theme.Text;
+            header.BackColor = Theme.Header;
+            Recolor(this);
+            log.BackColor = Theme.Card;
+            log.ForeColor = Theme.Muted;
+            ShowPaths();
+            if (last != null) ApplySnapshot(last);
+            tip.SetToolTip(toggle, Theme.Dark ? "라이트 모드로 바꾸기" : "다크 모드로 바꾸기");
+            ResumeLayout();
+            Native.DarkTitleBar(Handle, Theme.Dark);
+            Native.DarkScrollBars(log.Handle, Theme.Dark);
+            Invalidate(true);
+            SavePaths();
+        }
+
+        // 라벨과 점의 배경을 놓인 자리(카드/바탕)에 맞추고, Tag로 역할이 정해진 라벨은 글자색도 바꾼다.
+        static void Recolor(Control parent)
+        {
+            foreach (Control c in parent.Controls)
+            {
+                bool onCard = c.Parent is Card;
+                if (c is Label)
+                {
+                    c.BackColor = onCard ? Theme.Card : Theme.Bg;
+                    if ((c.Tag as string) == "muted") c.ForeColor = Theme.Muted;
+                    else if ((c.Tag as string) == "text") c.ForeColor = Theme.Text;
+                }
+                else if (c is Dot || c is Card) c.BackColor = Theme.Card;
+                Recolor(c);
+            }
         }
 
         void BrowseStart()
@@ -692,19 +879,17 @@ namespace KakaoExtra
                             try { ver = FileVersionInfo.GetVersionInfo(File.Exists(sandman) ? sandman : start).ProductVersion; } catch { }
                         }
                         snap.SbieText = "정상 작동" + (string.IsNullOrEmpty(ver) ? "" : " · v" + ver);
-                        snap.SbieColor = Theme.Ok;
+                        snap.SbieOk = true;
                     }
                     else
                     {
                         snap.SbieText = "서비스가 멈춰 있음";
-                        snap.SbieColor = Theme.Bad;
                     }
                 }
             }
             catch (InvalidOperationException)
             {
                 snap.SbieText = "설치되지 않음";
-                snap.SbieColor = Theme.Bad;
             }
             return snap;
         }
@@ -716,7 +901,7 @@ namespace KakaoExtra
                 s.Normal.Count > 0 ? "실행 중" : "실행 안 됨 · 먼저 실행하세요");
             SetRow(dotExtra, valExtra, s.Extra.Count > 0 ? Theme.Ok : Theme.Idle,
                 s.Extra.Count > 0 ? "실행 중" : "대기");
-            SetRow(dotSbie, valSbie, s.SbieColor, s.SbieText);
+            SetRow(dotSbie, valSbie, s.SbieOk ? Theme.Ok : Theme.Bad, s.SbieText);
             if (!busy) btnLaunch.Text = s.Extra.Count > 0 ? "추가 카카오톡 창 열기" : "추가 계정 실행";
         }
 
